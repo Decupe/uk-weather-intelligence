@@ -1,0 +1,16 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.backup
+.terraform/
+*.tfvars
+
+# Secrets
+.env
+config.json
+api_keys.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
