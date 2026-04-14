@@ -22,7 +22,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Primary Azure region"
   type        = string
-  default     = "uksouth"
+  default     = "eastus"
 }
 
 variable "environment" {

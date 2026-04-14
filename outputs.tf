@@ -36,7 +36,7 @@ output "synapse_workspace_name" {
 }
 
 output "synapse_sql_endpoint" {
-  value = "${var.synapse_name}-ondemand.sql.azuresynapse.net"
+  value = "uk-weather-synapse-ondemand.sql.azuresynapse.net"
 }
 
 output "aml_workspace_name" {

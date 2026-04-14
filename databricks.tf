@@ -7,7 +7,7 @@ resource "azurerm_databricks_workspace" "weather" {
   name                = var.databricks_name
   resource_group_name = azurerm_resource_group.weather.name
   location            = azurerm_resource_group.weather.location
-  sku                 = "trial"
+  sku                 = "premium"
   tags                = var.tags
 }
 
