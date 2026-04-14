@@ -1,0 +1,11 @@
+{
+	"name": "ls_ukweather_adls_dev",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://ukweatherstorage.dfs.core.windows.net/"
+		}
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"name": "uk-weather-adf",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "3af08f3b-4f10-4bfe-8cf7-8f9d91637bcb",
+		"tenantId": "60e31c1d-fc60-4780-a4c9-9fd7e64047c9"
+	}
+}

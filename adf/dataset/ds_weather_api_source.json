@@ -1,0 +1,33 @@
+{
+	"name": "ds_weather_api_source",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_openweathermap_api",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"lat": {
+				"type": "string"
+			},
+			"lon": {
+				"type": "string"
+			},
+			"api_key": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation",
+				"relativeUrl": {
+					"value": "@concat('/data/2.5/weather?lat=', dataset().lat, '&lon=', dataset().lon, '&appid=', dataset().api_key, '&units=metric')",
+					"type": "Expression"
+				}
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

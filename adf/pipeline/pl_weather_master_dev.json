@@ -1,0 +1,177 @@
+{
+	"name": "pl_weather_master_dev",
+	"properties": {
+		"activities": [
+			{
+				"name": "get_api_key",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://uk-weather-kv.vault.azure.net/secrets/openweathermap-api-key?api-version=7.0",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "set_api_key",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "get_api_key",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "api_key",
+					"value": {
+						"value": "@activity('get_api_key').output.value",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "ingest_all_cities",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "set_api_key",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@json('[{\"name\":\"London\",\"lat\":\"51.5074\",\"lon\":\"-0.1278\"},{\"name\":\"Manchester\",\"lat\":\"53.4808\",\"lon\":\"-2.2426\"},{\"name\":\"Birmingham\",\"lat\":\"52.4862\",\"lon\":\"-1.8904\"},{\"name\":\"Leeds\",\"lat\":\"53.8008\",\"lon\":\"-1.5491\"},{\"name\":\"Glasgow\",\"lat\":\"55.8642\",\"lon\":\"-4.2518\"},{\"name\":\"Liverpool\",\"lat\":\"53.4084\",\"lon\":\"-2.9916\"},{\"name\":\"Edinburgh\",\"lat\":\"55.9533\",\"lon\":\"-3.1883\"},{\"name\":\"Bristol\",\"lat\":\"51.4545\",\"lon\":\"-2.5879\"},{\"name\":\"Cardiff\",\"lat\":\"51.4816\",\"lon\":\"-3.1791\"},{\"name\":\"Newcastle\",\"lat\":\"54.9783\",\"lon\":\"-1.6178\"}]')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "ingest_city",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_ingest_city_weather_dev",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"city_name": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"lat": {
+										"value": "@item().lat",
+										"type": "Expression"
+									},
+									"lon": {
+										"value": "@item().lon",
+										"type": "Expression"
+									},
+									"api_key": {
+										"value": "@variables('api_key')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "run_databricks_transform",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ingest_all_cities",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_databricks_weather_dev",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"environment": {
+							"value": "@pipeline().parameters.environment",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "fail_master",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "get_api_key",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "ingest_all_cities",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": {
+						"value": "@concat('Master weather pipeline failed at: ', utcNow())",
+						"type": "Expression"
+					},
+					"errorCode": "500"
+				}
+			}
+		],
+		"parameters": {
+			"environment": {
+				"type": "string",
+				"defaultValue": "dev"
+			}
+		},
+		"variables": {
+			"api_key": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-14T22:19:08Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

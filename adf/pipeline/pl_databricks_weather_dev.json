@@ -1,0 +1,25 @@
+{
+	"name": "pl_databricks_weather_dev",
+	"properties": {
+		"activities": [
+			{
+				"name": "placeholder_transform",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			}
+		],
+		"parameters": {
+			"environment": {
+				"type": "string",
+				"defaultValue": "dev"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-14T22:19:07Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

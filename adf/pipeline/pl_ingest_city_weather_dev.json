@@ -1,0 +1,183 @@
+{
+	"name": "pl_ingest_city_weather_dev",
+	"properties": {
+		"activities": [
+			{
+				"name": "copy_current_weather",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "HttpReadSettings",
+							"requestMethod": "GET"
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"sink": {
+						"type": "JsonSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "JsonWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_weather_api_source",
+						"type": "DatasetReference",
+						"parameters": {
+							"lat": "@pipeline().parameters.lat",
+							"lon": "@pipeline().parameters.lon",
+							"api_key": "@pipeline().parameters.api_key"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_bronze_json_sink",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "bronze",
+							"folder_path": {
+								"value": "@concat('weather/current/', formatDateTime(utcNow(), 'yyyy/MM/dd/HH'), '/', pipeline().parameters.city_name)",
+								"type": "Expression"
+							},
+							"file_name": {
+								"value": "@concat(pipeline().parameters.city_name, '_', formatDateTime(utcNow(), 'yyyyMMddHH'), '.json')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "copy_air_quality",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "copy_current_weather",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "HttpReadSettings",
+							"requestMethod": "GET"
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"sink": {
+						"type": "JsonSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "JsonWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_airquality_api_source",
+						"type": "DatasetReference",
+						"parameters": {
+							"lat": "@pipeline().parameters.lat",
+							"lon": "@pipeline().parameters.lon",
+							"api_key": "@pipeline().parameters.api_key"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_bronze_json_sink",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "bronze",
+							"folder_path": {
+								"value": "@concat('airquality/', formatDateTime(utcNow(), 'yyyy/MM/dd/HH'), '/', pipeline().parameters.city_name)",
+								"type": "Expression"
+							},
+							"file_name": {
+								"value": "@concat(pipeline().parameters.city_name, '_airquality_', formatDateTime(utcNow(), 'yyyyMMddHH'), '.json')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "fail_city_ingestion",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "copy_current_weather",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "copy_air_quality",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": {
+						"value": "@concat('Weather ingestion failed for city: ', pipeline().parameters.city_name, ' at ', utcNow())",
+						"type": "Expression"
+					},
+					"errorCode": "500"
+				}
+			}
+		],
+		"parameters": {
+			"city_name": {
+				"type": "string"
+			},
+			"lat": {
+				"type": "string"
+			},
+			"lon": {
+				"type": "string"
+			},
+			"api_key": {
+				"type": "string"
+			},
+			"run_timestamp": {
+				"type": "string",
+				"defaultValue": "@utcNow()"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-14T22:19:07Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
