@@ -1,0 +1,27 @@
+{
+	"name": "tr_20min_weather_dev",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "pl_weather_master_dev",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"environment": "dev"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Minute",
+				"interval": 15,
+				"startTime": "2026-04-16T22:17:00",
+				"timeZone": "GMT Standard Time"
+			}
+		}
+	}
+}
