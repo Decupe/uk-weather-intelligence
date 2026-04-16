@@ -1,0 +1,70 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "uk-weather-adf"
+		},
+		"ls_keyvault_dev_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://uk-weather-kv.vault.azure.net/"
+		},
+		"ls_openweathermap_api_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://api.openweathermap.org"
+		},
+		"ls_ukweather_adls_dev_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://ukweatherstorage.dfs.core.windows.net/"
+		},
+		"tr_20min_weather_dev_properties_pl_weather_master_dev_parameters_environment": {
+			"type": "string",
+			"defaultValue": "dev"
+		},
+		"containerUri": {
+			"type": "string",
+			"metadata": "URI to storage account containing linked ARM templates"
+		},
+		"containerSasToken": {
+			"type": "string",
+			"metadata": "Sas token to storage account containing linked ARM templates"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "uk-weather-adf_ArmTemplate_0",
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2024-03-01",
+			"properties": {
+				"mode": "incremental",
+				"templateLink": {
+					"uri": "[concat(parameters('containerUri'), '/ArmTemplate_0.json', parameters('containerSasToken'))]",
+					"contentVersion": "1.0.0.0"
+				},
+				"parameters": {
+					"factoryName": {
+						"value": "[parameters('factoryName')]"
+					},
+					"ls_keyvault_dev_properties_typeProperties_baseUrl": {
+						"value": "[parameters('ls_keyvault_dev_properties_typeProperties_baseUrl')]"
+					},
+					"ls_openweathermap_api_properties_typeProperties_url": {
+						"value": "[parameters('ls_openweathermap_api_properties_typeProperties_url')]"
+					},
+					"ls_ukweather_adls_dev_properties_typeProperties_url": {
+						"value": "[parameters('ls_ukweather_adls_dev_properties_typeProperties_url')]"
+					},
+					"tr_20min_weather_dev_properties_pl_weather_master_dev_parameters_environment": {
+						"value": "[parameters('tr_20min_weather_dev_properties_pl_weather_master_dev_parameters_environment')]"
+					}
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}

@@ -1,0 +1,738 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "uk-weather-adf"
+		},
+		"ls_keyvault_dev_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://uk-weather-kv.vault.azure.net/"
+		},
+		"ls_openweathermap_api_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://api.openweathermap.org"
+		},
+		"ls_ukweather_adls_dev_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://ukweatherstorage.dfs.core.windows.net/"
+		},
+		"tr_20min_weather_dev_properties_pl_weather_master_dev_parameters_environment": {
+			"type": "string",
+			"defaultValue": "dev"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_databricks_weather_dev')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "get_databricks_token",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": "https://uk-weather-kv.vault.azure.net/secrets/databricks-access-token?api-version=7.0",
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					},
+					{
+						"name": "trigger_databricks_job",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "get_databricks_token",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Authorization": {
+									"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+									"type": "Expression"
+								},
+								"Content-Type": "application/json"
+							},
+							"url": "https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/jobs/run-now",
+							"body": "{\"job_id\": 116867814227194}"
+						}
+					},
+					{
+						"name": "wait_for_completion",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "trigger_databricks_job",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(or(equals(activity('check_job_status').output.state.life_cycle_state, 'TERMINATED'), equals(activity('check_job_status').output.state.life_cycle_state, 'SKIPPED')), equals(activity('check_job_status').output.state.life_cycle_state, 'INTERNAL_ERROR'))",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "wait_30_seconds",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 30
+									}
+								},
+								{
+									"name": "check_job_status",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "wait_30_seconds",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"headers": {
+											"Authorization": {
+												"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+												"type": "Expression"
+											}
+										},
+										"url": {
+											"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', string(activity('trigger_databricks_job').output.run_id))",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"timeout": "0.01:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"environment": {
+						"type": "string",
+						"defaultValue": "dev"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_ingest_city_weather_dev')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "copy_current_weather",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:05:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "HttpReadSettings",
+									"requestMethod": "GET"
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_weather_api_source",
+								"type": "DatasetReference",
+								"parameters": {
+									"lat": "@pipeline().parameters.lat",
+									"lon": "@pipeline().parameters.lon",
+									"api_key": "@pipeline().parameters.api_key"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_bronze_json_sink",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "bronze",
+									"folder_path": {
+										"value": "@concat('weather/current/', formatDateTime(utcNow(), 'yyyy/MM/dd/HH'), '/', pipeline().parameters.city_name)",
+										"type": "Expression"
+									},
+									"file_name": {
+										"value": "@concat(pipeline().parameters.city_name, '_', formatDateTime(utcNow(), 'yyyyMMddHH'), '.json')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "copy_air_quality",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "copy_current_weather",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:05:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "HttpReadSettings",
+									"requestMethod": "GET"
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_airquality_api_source",
+								"type": "DatasetReference",
+								"parameters": {
+									"lat": "@pipeline().parameters.lat",
+									"lon": "@pipeline().parameters.lon",
+									"api_key": "@pipeline().parameters.api_key"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_bronze_json_sink",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "bronze",
+									"folder_path": {
+										"value": "@concat('airquality/', formatDateTime(utcNow(), 'yyyy/MM/dd/HH'), '/', pipeline().parameters.city_name)",
+										"type": "Expression"
+									},
+									"file_name": {
+										"value": "@concat(pipeline().parameters.city_name, '_airquality_', formatDateTime(utcNow(), 'yyyyMMddHH'), '.json')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "fail_city_ingestion",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "copy_current_weather",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "copy_air_quality",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat('Weather ingestion failed for city: ', pipeline().parameters.city_name, ' at ', utcNow())",
+								"type": "Expression"
+							},
+							"errorCode": "500"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"city_name": {
+						"type": "string"
+					},
+					"lat": {
+						"type": "string"
+					},
+					"lon": {
+						"type": "string"
+					},
+					"api_key": {
+						"type": "string"
+					},
+					"run_timestamp": {
+						"type": "string",
+						"defaultValue": "@utcNow()"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-04-14T22:19:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_weather_api_source')]",
+				"[concat(variables('factoryId'), '/datasets/ds_bronze_json_sink')]",
+				"[concat(variables('factoryId'), '/datasets/ds_airquality_api_source')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_weather_master_dev')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "get_api_key",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": "https://uk-weather-kv.vault.azure.net/secrets/openweathermap-api-key?api-version=7.0",
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					},
+					{
+						"name": "set_api_key",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "get_api_key",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "api_key",
+							"value": {
+								"value": "@activity('get_api_key').output.value",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "ingest_all_cities",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "set_api_key",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@json('[{\"name\":\"London\",\"lat\":\"51.5074\",\"lon\":\"-0.1278\"},{\"name\":\"Manchester\",\"lat\":\"53.4808\",\"lon\":\"-2.2426\"},{\"name\":\"Birmingham\",\"lat\":\"52.4862\",\"lon\":\"-1.8904\"},{\"name\":\"Leeds\",\"lat\":\"53.8008\",\"lon\":\"-1.5491\"},{\"name\":\"Glasgow\",\"lat\":\"55.8642\",\"lon\":\"-4.2518\"},{\"name\":\"Liverpool\",\"lat\":\"53.4084\",\"lon\":\"-2.9916\"},{\"name\":\"Edinburgh\",\"lat\":\"55.9533\",\"lon\":\"-3.1883\"},{\"name\":\"Bristol\",\"lat\":\"51.4545\",\"lon\":\"-2.5879\"},{\"name\":\"Cardiff\",\"lat\":\"51.4816\",\"lon\":\"-3.1791\"},{\"name\":\"Newcastle\",\"lat\":\"54.9783\",\"lon\":\"-1.6178\"}]')",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 5,
+							"activities": [
+								{
+									"name": "ingest_city",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_ingest_city_weather_dev",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"city_name": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"lat": {
+												"value": "@item().lat",
+												"type": "Expression"
+											},
+											"lon": {
+												"value": "@item().lon",
+												"type": "Expression"
+											},
+											"api_key": {
+												"value": "@variables('api_key')",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "run_databricks_transform",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "ingest_all_cities",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_databricks_weather_dev",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"environment": {
+									"value": "@pipeline().parameters.environment",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "fail_master",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "get_api_key",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "ingest_all_cities",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat('Master weather pipeline failed at: ', utcNow())",
+								"type": "Expression"
+							},
+							"errorCode": "500"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"environment": {
+						"type": "string",
+						"defaultValue": "dev"
+					}
+				},
+				"variables": {
+					"api_key": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-04-14T22:19:08Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_databricks_weather_dev')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_ingest_city_weather_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_airquality_api_source')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_openweathermap_api",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"lat": {
+						"type": "string"
+					},
+					"lon": {
+						"type": "string"
+					},
+					"api_key": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation",
+						"relativeUrl": {
+							"value": "@concat('/data/2.5/air_pollution?lat=', dataset().lat, '&lon=', dataset().lon, '&appid=', dataset().api_key)",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_openweathermap_api')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_bronze_json_sink')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_ukweather_adls_dev",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string",
+						"defaultValue": "bronze"
+					},
+					"folder_path": {
+						"type": "string"
+					},
+					"file_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file_name",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder_path",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_ukweather_adls_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_weather_api_source')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_openweathermap_api",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"lat": {
+						"type": "string"
+					},
+					"lon": {
+						"type": "string"
+					},
+					"api_key": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation",
+						"relativeUrl": {
+							"value": "@concat('/data/2.5/weather?lat=', dataset().lat, '&lon=', dataset().lon, '&appid=', dataset().api_key, '&units=metric')",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_openweathermap_api')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_keyvault_dev')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('ls_keyvault_dev_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_openweathermap_api')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_openweathermap_api_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_ukweather_adls_dev')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_ukweather_adls_dev_properties_typeProperties_url')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/tr_20min_weather_dev')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "pl_weather_master_dev",
+							"type": "PipelineReference"
+						},
+						"parameters": {
+							"environment": "[parameters('tr_20min_weather_dev_properties_pl_weather_master_dev_parameters_environment')]"
+						}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Minute",
+						"interval": 15,
+						"startTime": "2026-04-16T22:17:00",
+						"timeZone": "GMT Standard Time"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_weather_master_dev')]"
+			]
+		}
+	]
+}
