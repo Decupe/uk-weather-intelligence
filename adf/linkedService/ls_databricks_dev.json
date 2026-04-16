@@ -1,0 +1,13 @@
+{
+	"name": "ls_databricks_dev",
+	"properties": {
+		"annotations": [],
+		"type": "AzureDatabricks",
+		"typeProperties": {
+			"domain": "https://adb-7405615056815200.0.azuredatabricks.net",
+			"authentication": "MSI",
+			"workspaceResourceId": "/subscriptions/702b5c28-d763-4bdb-bd00-9ca4a21ff06d/resourceGroups/uk-weather-dev/providers/Microsoft.Databricks/workspaces/uk-weather-databricks",
+			"existingClusterId": "0414-210239-wrn4sqea"
+		}
+	}
+}
