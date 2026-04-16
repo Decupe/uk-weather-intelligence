@@ -1,0 +1,128 @@
+{
+	"name": "pl_databricks_weather_dev",
+	"properties": {
+		"activities": [
+			{
+				"name": "get_databricks_token",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://uk-weather-kv.vault.azure.net/secrets/databricks-access-token?api-version=7.0",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "trigger_databricks_job",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "get_databricks_token",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+							"type": "Expression"
+						},
+						"Content-Type": "application/json"
+					},
+					"url": "https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/jobs/run-now",
+					"body": "{\"job_id\": 116867814227194}"
+				}
+			},
+			{
+				"name": "wait_for_completion",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "trigger_databricks_job",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(or(equals(activity('check_job_status').output.state.life_cycle_state, 'TERMINATED'), equals(activity('check_job_status').output.state.life_cycle_state, 'SKIPPED')), equals(activity('check_job_status').output.state.life_cycle_state, 'INTERNAL_ERROR'))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "wait_30_seconds",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 30
+							}
+						},
+						{
+							"name": "check_job_status",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "wait_30_seconds",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', string(activity('trigger_databricks_job').output.run_id))",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"timeout": "0.01:00:00"
+				}
+			}
+		],
+		"parameters": {
+			"environment": {
+				"type": "string",
+				"defaultValue": "dev"
+			}
+		},
+		"annotations": []
+	}
+}
