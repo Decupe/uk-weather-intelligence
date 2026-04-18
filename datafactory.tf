@@ -28,5 +28,12 @@ resource "azurerm_role_assignment" "adf_kv" {
   scope                = azurerm_key_vault.weather.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_data_factory.weather.identity[0].principal_id
+}
+
+# ── ADF → Databricks (run notebooks) ─────────────────────────
+resource "azurerm_role_assignment" "adf_databricks" {
+  scope                = azurerm_databricks_workspace.weather.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_data_factory.weather.identity[0].principal_id
   depends_on           = [azurerm_data_factory.weather]
 }
