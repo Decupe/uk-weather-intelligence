@@ -186,7 +186,7 @@
 						"typeProperties": {
 							"variableName": "run_id",
 							"value": {
-								"value": "@string(activity('trigger_databricks_job').output.run_id)",
+								"value": "@{activity('trigger_databricks_job').output.run_id}",
 								"type": "Expression"
 							}
 						}
