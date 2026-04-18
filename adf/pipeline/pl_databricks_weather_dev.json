@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "get_databricks_token",
+				"name": "get_sp_client_id",
 				"type": "WebActivity",
 				"dependsOn": [],
 				"policy": {
@@ -15,7 +15,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"method": "GET",
-					"url": "https://uk-weather-kv.vault.azure.net/secrets/databricks-access-token?api-version=7.0",
+					"url": "https://uk-weather-kv.vault.azure.net/secrets/sp-client-id?api-version=7.0",
 					"authentication": {
 						"type": "MSI",
 						"resource": "https://vault.azure.net"
@@ -23,11 +23,67 @@
 				}
 			},
 			{
-				"name": "set_token_variable",
+				"name": "get_sp_client_secret",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://uk-weather-kv.vault.azure.net/secrets/sp-client-secret?api-version=7.0",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "get_oauth_token",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "get_sp_client_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "get_sp_client_secret",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/x-www-form-urlencoded"
+					},
+					"url": "https://login.microsoftonline.com/60e31c1d-fc60-4780-a4c9-9fd7e64047c9/oauth2/v2.0/token",
+					"body": {
+						"value": "@concat('client_id=', activity('get_sp_client_id').output.value, '&client_secret=', activity('get_sp_client_secret').output.value, '&scope=2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default&grant_type=client_credentials')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "set_oauth_token",
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "get_databricks_token",
+						"activity": "get_oauth_token",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -39,9 +95,9 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"variableName": "databricks_token",
+					"variableName": "oauth_token",
 					"value": {
-						"value": "@activity('get_databricks_token').output.value",
+						"value": "@activity('get_oauth_token').output.access_token",
 						"type": "Expression"
 					}
 				}
@@ -51,7 +107,7 @@
 				"type": "WebActivity",
 				"dependsOn": [
 					{
-						"activity": "set_token_variable",
+						"activity": "set_oauth_token",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -68,7 +124,7 @@
 					"method": "POST",
 					"headers": {
 						"Authorization": {
-							"value": "@concat('Bearer ', variables('databricks_token'))",
+							"value": "@concat('Bearer ', variables('oauth_token'))",
 							"type": "Expression"
 						},
 						"Content-Type": "application/json"
@@ -150,7 +206,7 @@
 								"method": "GET",
 								"headers": {
 									"Authorization": {
-										"value": "@concat('Bearer ', variables('databricks_token'))",
+										"value": "@concat('Bearer ', variables('oauth_token'))",
 										"type": "Expression"
 									}
 								},
@@ -172,7 +228,7 @@
 			}
 		},
 		"variables": {
-			"databricks_token": {
+			"oauth_token": {
 				"type": "String"
 			},
 			"run_id": {
