@@ -56,11 +56,35 @@
 						}
 					},
 					{
+						"name": "set_token_variable",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "get_databricks_token",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "databricks_token",
+							"value": {
+								"value": "@activity('get_databricks_token').output.value",
+								"type": "Expression"
+							}
+						}
+					},
+					{
 						"name": "trigger_databricks_job",
 						"type": "WebActivity",
 						"dependsOn": [
 							{
-								"activity": "get_databricks_token",
+								"activity": "set_token_variable",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -77,7 +101,7 @@
 							"method": "POST",
 							"headers": {
 								"Authorization": {
-									"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+									"value": "@concat('Bearer ', variables('databricks_token'))",
 									"type": "Expression"
 								},
 								"Content-Type": "application/json"
@@ -87,11 +111,35 @@
 						}
 					},
 					{
+						"name": "set_run_id",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "trigger_databricks_job",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "run_id",
+							"value": {
+								"value": "@string(activity('trigger_databricks_job').output.run_id)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
 						"name": "wait_for_completion",
 						"type": "Until",
 						"dependsOn": [
 							{
-								"activity": "trigger_databricks_job",
+								"activity": "set_run_id",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -135,12 +183,12 @@
 										"method": "GET",
 										"headers": {
 											"Authorization": {
-												"value": "@concat('Bearer ', activity('get_databricks_token').output.value)",
+												"value": "@concat('Bearer ', variables('databricks_token'))",
 												"type": "Expression"
 											}
 										},
 										"url": {
-											"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', string(activity('trigger_databricks_job').output.run_id))",
+											"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', variables('run_id'))",
 											"type": "Expression"
 										}
 									}
@@ -157,6 +205,14 @@
 					"environment": {
 						"type": "string",
 						"defaultValue": "dev"
+					}
+				},
+				"variables": {
+					"databricks_token": {
+						"type": "String"
+					},
+					"run_id": {
+						"type": "String"
 					}
 				},
 				"annotations": []
