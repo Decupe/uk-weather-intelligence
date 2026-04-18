@@ -192,11 +192,43 @@
 						}
 					},
 					{
+						"name": "debug_run_id",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "set_run_id",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {
+								"Authorization": {
+									"value": "@concat('Bearer ', variables('oauth_token'))",
+									"type": "Expression"
+								}
+							},
+							"url": {
+								"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', variables('run_id'))",
+								"type": "Expression"
+							}
+						}
+					},
+					{
 						"name": "wait_for_completion",
 						"type": "Until",
 						"dependsOn": [
 							{
-								"activity": "set_run_id",
+								"activity": "debug_run_id",
 								"dependencyConditions": [
 									"Succeeded"
 								]
