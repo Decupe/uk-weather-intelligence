@@ -132,125 +132,6 @@
 					"url": "https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/jobs/run-now",
 					"body": "{\"job_id\": 116867814227194}"
 				}
-			},
-			{
-				"name": "set_run_id",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "trigger_databricks_job",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "run_id",
-					"value": {
-						"value": "@{activity('trigger_databricks_job').output.run_id}",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "debug_run_id",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "set_run_id",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"method": "GET",
-					"headers": {
-						"Authorization": {
-							"value": "@concat('Bearer ', variables('oauth_token'))",
-							"type": "Expression"
-						}
-					},
-					"url": {
-						"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', variables('run_id'))",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "wait_for_completion",
-				"type": "Until",
-				"dependsOn": [
-					{
-						"activity": "debug_run_id",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"expression": {
-						"value": "@or(or(equals(activity('check_job_status').output.state.life_cycle_state, 'TERMINATED'), equals(activity('check_job_status').output.state.life_cycle_state, 'SKIPPED')), equals(activity('check_job_status').output.state.life_cycle_state, 'INTERNAL_ERROR'))",
-						"type": "Expression"
-					},
-					"activities": [
-						{
-							"name": "wait_30_seconds",
-							"type": "Wait",
-							"dependsOn": [],
-							"userProperties": [],
-							"typeProperties": {
-								"waitTimeInSeconds": 30
-							}
-						},
-						{
-							"name": "check_job_status",
-							"type": "WebActivity",
-							"dependsOn": [
-								{
-									"activity": "wait_30_seconds",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"method": "GET",
-								"headers": {
-									"Authorization": {
-										"value": "@concat('Bearer ', variables('oauth_token'))",
-										"type": "Expression"
-									}
-								},
-								"url": {
-									"value": "@concat('https://adb-7405615056815200.0.azuredatabricks.net/api/2.1/runs/get?run_id=', variables('run_id'))",
-									"type": "Expression"
-								}
-							}
-						}
-					],
-					"timeout": "0.01:00:00"
-				}
 			}
 		],
 		"parameters": {
@@ -261,9 +142,6 @@
 		},
 		"variables": {
 			"oauth_token": {
-				"type": "String"
-			},
-			"run_id": {
 				"type": "String"
 			}
 		},
